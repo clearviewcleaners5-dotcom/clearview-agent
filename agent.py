@@ -1,5 +1,16 @@
 """
 CVC Content Agent
+-----------------
+Runs two scheduled jobs:
+  1. 6:00 AM Mountain Time daily  → Generate a video concept + script
+  2. 5:00 PM Mountain Time Mon/Wed/Fri → Pull latest video from Dropbox, post to Facebook
+
+Required environment variables (set these in Vercel):
+  ANTHROPIC_API_KEY      - Your Claude API key
+  DROPBOX_ACCESS_TOKEN   - Dropbox app access token
+  META_PAGE_ACCESS_TOKEN - Facebook Page access token
+  META_PAGE_ID           - Your Facebook Page ID
+  INSTAGRAM_ACCOUNT_ID   - Your Instagram Business Account ID
 """
 
 import os
@@ -12,7 +23,7 @@ from apscheduler.triggers.cron import CronTrigger
 import pytz
 import anthropic
 from datetime import datetime
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Response
 
 app = Flask(__name__)
 
@@ -45,41 +56,70 @@ def generate_daily_concept():
     claude, _ = get_clients()
     today = datetime.now(MOUNTAIN).strftime("%A, %B %d")
     theme = CONTENT_THEMES[datetime.now(MOUNTAIN).timetuple().tm_yday % len(CONTENT_THEMES)]
+
     prompt = f"""You are a social media strategist for Clearest View Cleaners (CVC), a window cleaning,
 soft washing, pressure washing, and gutter cleaning company in Medicine Hat, Alberta, Canada.
-They post short-form vertical video 3x per week. Today is {today}.
-Generate a video concept based on this theme: "{theme}".
+They post short-form vertical video (Reels / TikTok style) 3x per week.
 
-Return EXACTLY this structure:
+Today is {today}. Generate a video concept based on this theme: "{theme}".
 
-VIDEO CONCEPT OF THE DAY
+Return EXACTLY this structure with these exact section headers and emoji markers:
+
+🎬 VIDEO CONCEPT OF THE DAY
 Theme: {theme}
+Date: {today}
 
-HOOK (first 3 seconds):
-[punchy hook]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SCRIPT OUTLINE (30-60 seconds):
-[step by step]
+🎣 HOOK (first 3 seconds on screen):
+[Write a punchy hook line — this is the first thing viewers see or hear]
 
-FILMING TIPS:
-[2-3 phone filming tips]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-EDITING NOTES:
-[cuts, music, text overlays]
+📋 SCRIPT OUTLINE (30–60 seconds):
+Step 1: [what to say/show]
+Step 2: [what to say/show]
+Step 3: [what to say/show]
+Step 4: [what to say/show]
+Step 5: [end card or CTA]
 
-FACEBOOK CAPTION:
-[conversational, local, ends with CTA]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-INSTAGRAM CAPTION:
-[with hashtags]"""
+📱 FILMING TIPS:
+• [tip 1]
+• [tip 2]
+• [tip 3]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✂️ EDITING NOTES:
+• Speed / pacing: [note]
+• Music vibe: [note]
+• Text overlays: [note]
+• Transitions: [note]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📘 FACEBOOK CAPTION:
+[Write the full Facebook caption here — conversational, local Medicine Hat feel, ends with a CTA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📸 INSTAGRAM CAPTION:
+[Write the full Instagram caption here — punchy opener, same video, include hashtags at the bottom]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⏰ POST: Monday, Wednesday, or Friday at 5 PM Mountain Time
+"""
 
     message = claude.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=1000,
+        max_tokens=1200,
         messages=[{"role": "user", "content": prompt}]
     )
     concept = message.content[0].text
-    print(f"CVC DAILY CONCEPT — {today}\n{concept}")
+    print(f"\nCVC DAILY CONCEPT — {today}\n{concept}")
     return concept
 
 
@@ -141,17 +181,21 @@ scheduler.start()
 
 @app.route("/")
 def index():
-    return jsonify({"status": "CVC Content Agent is running"})
+    return jsonify({"status": "CVC Content Agent is running ✅"})
+
 
 @app.route("/test-concept")
 def test_concept():
     concept = generate_daily_concept()
-    return jsonify({"concept": concept})
+    # Return as plain text so it's readable in the browser
+    return Response(concept, mimetype="text/plain; charset=utf-8")
+
 
 @app.route("/test-post")
 def test_post():
     post_scheduled_content()
     return jsonify({"status": "Post triggered"})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
