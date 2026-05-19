@@ -10,11 +10,15 @@ Required environment variables (set these in Vercel):
   DROPBOX_ACCESS_TOKEN   - Dropbox app access token
   META_PAGE_ACCESS_TOKEN - Facebook Page access token
   META_PAGE_ID           - Your Facebook Page ID
-  SENDGRID_API_KEY       - SendGrid API key for sending emails
+  GMAIL_ADDRESS          - clearviewcleaners5@gmail.com
+  GMAIL_APP_PASSWORD     - Your 16-character Gmail app password
 """
 
 import os
 import io
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import requests
 import dropbox
 from dropbox.exceptions import ApiError
@@ -32,7 +36,6 @@ DROPBOX_FOLDER = "/CVC videos"
 META_API_VERSION = "v20.0"
 META_BASE = f"https://graph.facebook.com/{META_API_VERSION}"
 TO_EMAIL = "clearviewcleaners5@gmail.com"
-FROM_EMAIL = "clearviewcleaners5@gmail.com"
 
 CONTENT_THEMES = [
     "satisfying before/after transformation",
@@ -55,31 +58,30 @@ def get_clients():
 
 
 def send_email(subject, body):
-    """Send email via SendGrid API."""
-    api_key = os.environ.get("SENDGRID_API_KEY")
-    if not api_key:
-        print("No SendGrid API key found — skipping email.")
+    """Send email via Gmail SMTP."""
+    gmail_address = os.environ.get("GMAIL_ADDRESS")
+    gmail_password = os.environ.get("GMAIL_APP_PASSWORD")
+
+    if not gmail_address or not gmail_password:
+        print("No Gmail credentials found — skipping email.")
         return False
 
-    response = requests.post(
-        "https://api.sendgrid.com/v3/mail/send",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "personalizations": [{"to": [{"email": TO_EMAIL}]}],
-            "from": {"email": FROM_EMAIL, "name": "CVC Content Agent"},
-            "subject": subject,
-            "content": [{"type": "text/plain", "value": body}]
-        }
-    )
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = gmail_address
+        msg["To"] = TO_EMAIL
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
 
-    if response.status_code == 202:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(gmail_address, gmail_password)
+            server.sendmail(gmail_address, TO_EMAIL, msg.as_string())
+
         print(f"✅ Email sent to {TO_EMAIL}")
         return True
-    else:
-        print(f"❌ Email failed: {response.status_code} {response.text}")
+
+    except Exception as e:
+        print(f"❌ Email failed: {e}")
         return False
 
 
@@ -125,9 +127,9 @@ Step 5: [end card or verbal CTA]
 
 ✂️ EDITING TIPS:
 • Pacing: [how fast/slow, when to cut]
-• Music: [specific vibe or example track style — e.g. "upbeat hip hop", "satisfying ASMR no music", "cinematic build"]
+• Music: [specific vibe or example track style]
 • Text overlays: [exactly what text to put on screen and when]
-• Transitions: [specific transition style to use — e.g. "whip pan", "cut on action", "slow zoom into reveal"]
+• Transitions: [specific transition style — e.g. whip pan, cut on action, slow zoom]
 • Color grade: [warm/cool/high contrast — what look fits this video]
 • Hook edit: [how to make the first 3 seconds hit hard in the edit]
 • App recommendation: [best app for this edit — CapCut, InShot, etc — and one specific feature to use]
@@ -155,11 +157,7 @@ Step 5: [end card or verbal CTA]
     concept = message.content[0].text
     print(f"\nCVC DAILY CONCEPT — {today}\n{concept}")
 
-    # Email it
-    send_email(
-        subject=f"📱 CVC Video Concept — {today}",
-        body=concept
-    )
+    send_email(subject=f"📱 CVC Video Concept — {today}", body=concept)
 
     return concept
 
